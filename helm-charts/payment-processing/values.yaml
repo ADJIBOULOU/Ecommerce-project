@@ -1,0 +1,161 @@
+# Default values for payment-processing microservice
+
+# Deployment configuration
+replicaCount: 3  # Higher replica count for critical payment service
+
+image:
+  repository: your-account.dkr.ecr.us-west-2.amazonaws.com/payment-processing
+  pullPolicy: IfNotPresent
+  tag: ""  # Overrides the image tag whose default is the chart appVersion
+
+nameOverride: ""
+fullnameOverride: ""
+
+# Service configuration
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 8080
+
+# Ingress configuration
+ingress:
+  enabled: true
+  className: "alb"
+  annotations:
+    kubernetes.io/ingress.class: alb
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/ssl-redirect: '443'
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTPS": 443}]'  # HTTPS only for payments
+  hosts:
+    - host: api.ecommerce-platform.com
+      paths:
+        - path: /api/payments
+          pathType: Prefix
+  tls: []
+
+# Resource limits and requests (higher for payment processing)
+resources:
+  limits:
+    cpu: 2000m
+    memory: 2Gi
+  requests:
+    cpu: 500m
+    memory: 512Mi
+
+# Horizontal Pod Autoscaler
+autoscaling:
+  enabled: true
+  minReplicas: 3
+  maxReplicas: 15
+  targetCPUUtilizationPercentage: 60
+  targetMemoryUtilizationPercentage: 70
+
+# Pod Disruption Budget (stricter for payments)
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 2
+
+# Security Context
+podSecurityContext:
+  fsGroup: 65534
+  runAsNonRoot: true
+  runAsUser: 65534
+
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+    - ALL
+  readOnlyRootFilesystem: true
+  runAsNonRoot: true
+  runAsUser: 65534
+
+# Node scheduling
+nodeSelector:
+  kubernetes.io/arch: amd64
+
+tolerations: []
+
+affinity:
+  podAntiAffinity:
+    requiredDuringSchedulingIgnoredDuringExecution:
+      - labelSelector:
+          matchExpressions:
+            - key: app.kubernetes.io/name
+              operator: In
+              values:
+                - payment-processing
+        topologyKey: kubernetes.io/hostname
+
+# Health checks (more aggressive for payments)
+livenessProbe:
+  httpGet:
+    path: /health
+    port: http
+  initialDelaySeconds: 30
+  periodSeconds: 15
+  timeoutSeconds: 5
+  failureThreshold: 3
+
+readinessProbe:
+  httpGet:
+    path: /ready
+    port: http
+  initialDelaySeconds: 15
+  periodSeconds: 5
+  timeoutSeconds: 3
+  failureThreshold: 3
+
+# Environment variables
+env:
+  - name: PORT
+    value: "8080"
+  - name: NODE_ENV
+    value: "production"
+  - name: LOG_LEVEL
+    value: "info"
+
+# ConfigMap for application configuration
+config:
+  database:
+    host: "postgres-service.default.svc.cluster.local"
+    port: "5432"
+    name: "paymentdb"
+  redis:
+    host: "redis-service.default.svc.cluster.local"
+    port: "6379"
+  payment_gateways:
+    stripe:
+      api_url: "https://api.stripe.com"
+    paypal:
+      api_url: "https://api.paypal.com"
+  feature_flags:
+    enable_fraud_detection: "true"
+    enable_retry_logic: "true"
+    payment_timeout: "120"  # 2 minutes
+
+# Secret configuration
+secret:
+  database:
+    username: "payment_user"
+    password: "secure_password"
+  redis:
+    password: "redis_password"
+  payment_gateways:
+    stripe:
+      api_key: "stripe_api_key"
+      webhook_secret: "stripe_webhook_secret"
+    paypal:
+      client_id: "paypal_client_id"
+      client_secret: "paypal_client_secret"
+  jwt:
+    secret: "jwt_secret_key"
+  encryption:
+    key: "payment_encryption_key"
+
+# Service Account
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""

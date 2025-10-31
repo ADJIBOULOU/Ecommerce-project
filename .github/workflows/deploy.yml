@@ -1,0 +1,386 @@
+name: Deploy to EKS
+
+on:
+  pull_request:
+    branches: [ develop, master, release ]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy to'
+        required: true
+        type: choice
+        options:
+          - dev
+          - staging
+          - production
+
+env:
+  AWS_REGION: us-west-2
+  
+jobs:
+  # Determine environment based on branch
+  setup:
+    name: 'Setup Environment Variables'
+    runs-on: ubuntu-latest
+    outputs:
+      environment: ${{ steps.env.outputs.environment }}
+      terraform_dir: ${{ steps.env.outputs.terraform_dir }}
+      cluster_name: ${{ steps.env.outputs.cluster_name }}
+      namespace: ${{ steps.env.outputs.namespace }}
+    steps:
+    - name: Determine environment
+      id: env
+      run: |
+        if [ "${{ github.event.inputs.environment }}" != "" ]; then
+          # Manual workflow dispatch
+          ENV="${{ github.event.inputs.environment }}"
+        elif [ "${{ github.ref }}" = "refs/heads/develop" ]; then
+          ENV="dev"
+        elif [ "${{ github.ref }}" = "refs/heads/master" ]; then
+          ENV="staging"
+        elif [ "${{ github.ref }}" = "refs/heads/release" ]; then
+          ENV="production"
+        else
+          ENV="dev"  # default fallback
+        fi
+        
+        # Set terraform directory
+        if [ "$ENV" = "production" ]; then
+          TERRAFORM_DIR="prod"
+        else
+          TERRAFORM_DIR="$ENV"
+        fi
+        
+        # Set cluster name
+        CLUSTER_NAME="ecommerce-platform-${ENV}-eks"
+        
+        echo "environment=$ENV" >> $GITHUB_OUTPUT
+        echo "terraform_dir=$TERRAFORM_DIR" >> $GITHUB_OUTPUT
+        echo "cluster_name=$CLUSTER_NAME" >> $GITHUB_OUTPUT
+        echo "namespace=$ENV" >> $GITHUB_OUTPUT
+        
+        echo "🚀 Deploying to: $ENV environment"
+        echo "📁 Terraform directory: $TERRAFORM_DIR"
+        echo "🎯 EKS Cluster: $CLUSTER_NAME"
+        echo "📦 Namespace: $ENV"
+
+  # Infrastructure deployment
+  terraform:
+    name: 'Terraform Infrastructure'
+    runs-on: ubuntu-latest
+    needs: [setup]
+    environment: ${{ needs.setup.outputs.environment }}
+    
+    defaults:
+      run:
+        shell: bash
+        working-directory: ./terraform/environments/${{ needs.setup.outputs.terraform_dir }}
+    
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+    
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.AWS_REGION }}
+    
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v3
+      with:
+        terraform_version: 1.6.0
+    
+    - name: Terraform Format Check
+      id: fmt
+      run: terraform fmt -check -recursive
+      continue-on-error: true
+    
+    - name: Terraform Init
+      id: init
+      run: terraform init
+    
+    - name: Terraform Validate
+      id: validate
+      run: terraform validate -no-color
+    
+    - name: Terraform Plan
+      id: plan
+      if: github.event_name == 'pull_request'
+      run: terraform plan -no-color -input=false
+      continue-on-error: true
+    
+    - name: Update Pull Request
+      uses: actions/github-script@v7
+      if: github.event_name == 'pull_request'
+      env:
+        PLAN: "terraform\n${{ steps.plan.outputs.stdout }}"
+      with:
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        script: |
+          const output = `#### Terraform Format and Style 🖌\`${{ steps.fmt.outcome }}\`
+          #### Terraform Initialization ⚙️\`${{ steps.init.outcome }}\`
+          #### Terraform Validation 🤖\`${{ steps.validate.outcome }}\`
+          #### Terraform Plan 📖\`${{ steps.plan.outcome }}\`
+
+          <details><summary>Show Plan</summary>
+
+          \`\`\`\n
+          ${process.env.PLAN}
+          \`\`\`
+
+          </details>
+
+          *Pusher: @${{ github.actor }}, Action: \`${{ github.event_name }}\`*`;
+
+          github.rest.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: output
+          })
+    
+    - name: Terraform Plan Status
+      if: steps.plan.outcome == 'failure'
+      run: exit 1
+    
+    - name: Terraform Apply
+      if: github.event_name == 'push'
+      run: terraform apply -auto-approve -input=false
+
+  # Security scanning
+  # security:
+  #   name: 'Security Scanning'
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #   - name: Checkout code
+  #     uses: actions/checkout@v4
+    
+  #   - name: Run Trivy vulnerability scanner in fs mode
+  #     uses: aquasecurity/trivy-action@master
+  #     with:
+  #       scan-type: 'fs'
+  #       scan-ref: '.'
+  #       format: 'sarif'
+  #       output: 'trivy-results.sarif'
+    
+  #   - name: Upload Trivy scan results to GitHub Security tab
+  #     uses: github/codeql-action/upload-sarif@v2
+  #     if: always()
+  #     with:
+  #       sarif_file: 'trivy-results.sarif'
+    
+  #   - name: Run Checkov action
+  #     id: checkov
+  #     uses: bridgecrewio/checkov-action@master
+  #     with:
+  #       directory: .
+  #       framework: terraform,kubernetes,dockerfile
+  #       output_format: sarif
+  #       output_file_path: checkov-results.sarif
+    
+  #   - name: Upload Checkov scan results
+  #     uses: github/codeql-action/upload-sarif@v2
+  #     if: always()
+  #     with:
+  #       sarif_file: checkov-results.sarif
+
+  # Build and push container images
+  build-images:
+    name: 'Build Container Images'
+    runs-on: ubuntu-latest
+    needs: [setup]
+    environment: ${{ needs.setup.outputs.environment }}
+    
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+    
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.AWS_REGION }}
+    
+    - name: Login to Amazon ECR
+      id: login-ecr
+      uses: aws-actions/amazon-ecr-login@v2
+    
+    - name: Build, tag, and push all container images
+      env:
+        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        IMAGE_TAG: ${{ github.sha }}
+        ENVIRONMENT: ${{ needs.setup.outputs.environment }}
+      run: |
+        # Define services array
+        services=("product-catalog" "user-accounts" "shopping-cart" "order-management" "payment-processing")
+        
+        # Loop through each service
+        for service in "${services[@]}"; do
+          echo "🔨 Processing $service container image..."
+          
+          # Check if source directory exists
+          if [ ! -d "./src/$service/" ]; then
+            echo "⚠️  Source directory ./src/$service/ not found, skipping build for $service"
+            echo "💡 This service may use pre-built images or be built elsewhere"
+            continue
+          fi
+          
+          # Set ECR repository name
+          ECR_REPOSITORY="ecommerce-${service}"
+          
+          # Build docker container and push it to ECR
+          echo "📦 Building Docker image for $service..."
+          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG ./src/$service/
+          
+          echo "🚀 Pushing image to ECR..."
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          
+          # Tag with environment-specific tag
+          echo "🏷️ Tagging with environment-specific tag: $ENVIRONMENT-latest"
+          docker tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY:$ENVIRONMENT-latest
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$ENVIRONMENT-latest
+          
+          # Tag as latest for production branch
+          if [ "${{ github.ref }}" = "refs/heads/release" ]; then
+            echo "🏷️ Tagging as latest for production..."
+            docker tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY:latest
+            docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
+          fi
+          
+          echo "✅ Successfully built and pushed $service image"
+        done
+        
+        echo "🎉 All container images built and pushed successfully!"
+
+  # Deploy to Kubernetes
+  deploy:
+    name: 'Deploy to Kubernetes'
+    runs-on: ubuntu-latest
+    needs: [setup, terraform]
+    environment: ${{ needs.setup.outputs.environment }}
+    
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+    
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.AWS_REGION }}
+    
+    - name: Setup kubectl
+      uses: azure/setup-kubectl@v3
+      with:
+        version: 'v1.29.0'
+    
+    - name: Setup Helm
+      uses: azure/setup-helm@v3
+      with:
+        version: '3.12.0'
+    
+    - name: Configure kubectl
+      run: |
+        aws eks update-kubeconfig --region ${{ env.AWS_REGION }} --name ${{ needs.setup.outputs.cluster_name }}
+    
+    - name: Deploy monitoring stack
+      if: needs.setup.outputs.environment == 'production'
+      run: |
+        kubectl apply -f kubernetes/base/namespaces.yaml
+        kubectl apply -f monitoring/prometheus/
+        kubectl apply -f monitoring/grafana/
+    
+    - name: Deploy Helm charts
+      env:
+        ENVIRONMENT: ${{ needs.setup.outputs.environment }}
+        NAMESPACE: ${{ needs.setup.outputs.namespace }}
+        IMAGE_TAG: ${{ github.sha }}
+      run: |
+        # Create namespace if not exists
+        kubectl create namespace $NAMESPACE --dry-run=client -o yaml | kubectl apply -f -
+        
+        # Deploy each microservice using Helm with environment-specific values
+        for service in product-catalog user-accounts shopping-cart order-management payment-processing; do
+          # Determine values file based on environment
+          if [ "$ENVIRONMENT" = "dev" ]; then
+            VALUES_FILE="values-dev.yaml"
+          elif [ "$ENVIRONMENT" = "staging" ]; then
+            VALUES_FILE="values-staging.yaml"
+          elif [ "$ENVIRONMENT" = "production" ]; then
+            VALUES_FILE="values-prod.yaml"
+          else
+            VALUES_FILE="values.yaml"
+          fi
+          
+          echo "🚀 Deploying $service to $ENVIRONMENT using $VALUES_FILE"
+          
+          helm upgrade --install $service-$ENVIRONMENT ./helm-charts/$service \
+            --namespace $NAMESPACE \
+            --values ./helm-charts/$service/$VALUES_FILE \
+            --set image.tag=$IMAGE_TAG \
+            --set environment=$ENVIRONMENT \
+            --wait \
+            --timeout=10m
+        done
+    
+    - name: Verify deployment
+      run: |
+        NAMESPACE=${{ needs.setup.outputs.namespace }}
+        echo "📊 Deployment Status for ${{ needs.setup.outputs.environment }} environment:"
+        kubectl get pods -n $NAMESPACE
+        kubectl get services -n $NAMESPACE
+        kubectl get ingress -n $NAMESPACE
+
+  # Performance tests
+  performance-tests:
+    name: 'Performance Tests'
+    runs-on: ubuntu-latest
+    needs: [setup, deploy]
+    if: needs.setup.outputs.environment == 'staging' || needs.setup.outputs.environment == 'production'
+    
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '18'
+    
+    - name: Install k6
+      run: |
+        sudo gpg -k
+        sudo gpg --no-default-keyring --keyring /usr/share/keyrings/k6-archive-keyring.gpg --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys C5AD17C747E3415A3642D57D77C6C491D6AC1D69
+        echo "deb [signed-by=/usr/share/keyrings/k6-archive-keyring.gpg] https://dl.k6.io/deb stable main" | sudo tee /etc/apt/sources.list.d/k6.list
+        sudo apt-get update
+        sudo apt-get install k6
+    
+    - name: Run performance tests
+      env:
+        ENVIRONMENT: ${{ needs.setup.outputs.environment }}
+      run: |
+        # Add your k6 performance tests here
+        echo "🚀 Running performance tests against $ENVIRONMENT environment"
+        # k6 run tests/performance/api-load-test.js
+
+  # Notification
+  # notify:
+  #   name: 'Notify'
+  #   runs-on: ubuntu-latest
+  #   needs: [deploy, performance-tests]
+  #   if: always()
+    
+  #   steps:
+  #   - name: Notify Slack
+  #     uses: 8398a7/action-slack@v3
+  #     if: always()
+  #     env:
+  #       SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK }}
+  #     with:
+  #       status: ${{ job.status }}
+  #       channel: '#deployments'
+  #       fields: repo,message,commit,author,action,eventName,ref,workflow,job,took

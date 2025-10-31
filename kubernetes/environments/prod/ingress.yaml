@@ -1,0 +1,126 @@
+# Main Application Load Balancer Ingress for Production
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ecommerce-alb-ingress
+  namespace: production
+  labels:
+    app: ecommerce-platform
+  annotations:
+    kubernetes.io/ingress.class: alb
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/ssl-redirect: '443'
+    alb.ingress.kubernetes.io/certificate-arn: "arn:aws:acm:us-west-2:ACCOUNT_ID:certificate/CERTIFICATE_ID"
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}, {"HTTPS": 443}]'
+    alb.ingress.kubernetes.io/healthcheck-path: /health
+    alb.ingress.kubernetes.io/healthcheck-interval-seconds: '30'
+    alb.ingress.kubernetes.io/healthy-threshold-count: '2'
+    alb.ingress.kubernetes.io/unhealthy-threshold-count: '3'
+    alb.ingress.kubernetes.io/success-codes: '200'
+    alb.ingress.kubernetes.io/load-balancer-name: ecommerce-platform-prod-alb
+    alb.ingress.kubernetes.io/tags: |
+      Environment=production,
+      Project=ecommerce-platform,
+      ManagedBy=k8s-ingress
+spec:
+  rules:
+  - host: api.ecommerce-platform.com
+    http:
+      paths:
+      - path: /api/products
+        pathType: Prefix
+        backend:
+          service:
+            name: product-catalog-service
+            port:
+              number: 80
+      - path: /api/users
+        pathType: Prefix
+        backend:
+          service:
+            name: user-accounts-service
+            port:
+              number: 80
+      - path: /api/cart
+        pathType: Prefix
+        backend:
+          service:
+            name: shopping-cart-service
+            port:
+              number: 80
+      - path: /api/orders
+        pathType: Prefix
+        backend:
+          service:
+            name: order-management-service
+            port:
+              number: 80
+      - path: /api/payments
+        pathType: Prefix
+        backend:
+          service:
+            name: payment-processing-service
+            port:
+              number: 80
+      - path: /health
+        pathType: Exact
+        backend:
+          service:
+            name: product-catalog-service
+            port:
+              number: 80
+---
+# Internal Load Balancer for microservice communication
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ecommerce-internal-ingress
+  namespace: production
+  labels:
+    app: ecommerce-platform
+    type: internal
+  annotations:
+    kubernetes.io/ingress.class: alb
+    alb.ingress.kubernetes.io/scheme: internal
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/healthcheck-path: /internal/health
+    alb.ingress.kubernetes.io/load-balancer-name: ecommerce-platform-internal-alb
+    alb.ingress.kubernetes.io/tags: |
+      Environment=production,
+      Project=ecommerce-platform,
+      Type=internal,
+      ManagedBy=k8s-ingress
+spec:
+  rules:
+  - host: internal.ecommerce-platform.local
+    http:
+      paths:
+      - path: /internal/products
+        pathType: Prefix
+        backend:
+          service:
+            name: product-catalog-service
+            port:
+              number: 80
+      - path: /internal/users
+        pathType: Prefix
+        backend:
+          service:
+            name: user-accounts-service
+            port:
+              number: 80
+      - path: /internal/cart
+        pathType: Prefix
+        backend:
+          service:
+            name: shopping-cart-service
+            port:
+              number: 80
+      - path: /internal/orders
+        pathType: Prefix
+        backend:
+          service:
+            name: order-management-service
+            port:
+              number: 80

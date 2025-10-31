@@ -1,0 +1,54 @@
+# Namespace for development environment
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: dev
+  labels:
+    name: dev
+    environment: development
+  annotations:
+    description: "Development environment for e-commerce microservices"
+---
+# Namespace for staging environment
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: staging
+  labels:
+    name: staging
+    environment: staging
+  annotations:
+    description: "Staging environment for e-commerce microservices"
+---
+# Namespace for production environment
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: production
+  labels:
+    name: production
+    environment: production
+  annotations:
+    description: "Production environment for e-commerce microservices"
+---
+# Namespace for monitoring stack
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: monitoring
+  labels:
+    name: monitoring
+    component: monitoring
+  annotations:
+    description: "Monitoring stack with Prometheus and Grafana"
+---
+# Namespace for ingress controller
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ingress-nginx
+  labels:
+    name: ingress-nginx
+    component: ingress
+  annotations:
+    description: "NGINX Ingress Controller namespace"

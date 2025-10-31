@@ -1,0 +1,112 @@
+# Environment-specific Grafana deployment for production
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: grafana-prod
+  namespace: monitoring
+  labels:
+    app: grafana
+    environment: prod
+spec:
+  replicas: 2  # High availability for production
+  selector:
+    matchLabels:
+      app: grafana
+      environment: prod
+  template:
+    metadata:
+      labels:
+        app: grafana
+        environment: prod
+    spec:
+      serviceAccountName: grafana
+      automountServiceAccountToken: false
+      securityContext:
+        fsGroup: 472
+        runAsUser: 472
+        runAsNonRoot: true
+      containers:
+      - name: grafana
+        image: grafana/grafana:10.1.0
+        ports:
+        - containerPort: 3000
+        env:
+        - name: GF_SECURITY_ADMIN_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: grafana-admin-secret
+              key: password
+        - name: GF_INSTALL_PLUGINS
+          value: "grafana-kubernetes-app,grafana-piechart-panel,grafana-worldmap-panel"
+        resources:
+          limits:
+            cpu: 500m      # High limits for production
+            memory: 1.5Gi
+            ephemeral-storage: 2Gi
+          requests:
+            cpu: 250m
+            memory: 768Mi
+            ephemeral-storage: 1Gi
+        volumeMounts:
+        - name: grafana-config-volume
+          mountPath: /etc/grafana/
+        - name: grafana-storage
+          mountPath: /var/lib/grafana
+        - name: grafana-dashboards
+          mountPath: /var/lib/grafana/dashboards
+        livenessProbe:
+          httpGet:
+            path: /api/health
+            port: 3000
+          initialDelaySeconds: 60
+          timeoutSeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /api/health
+            port: 3000
+          initialDelaySeconds: 5
+          timeoutSeconds: 3
+          periodSeconds: 5
+      volumes:
+      - name: grafana-config-volume
+        configMap:
+          name: grafana-config-prod
+      - name: grafana-storage
+        persistentVolumeClaim:
+          claimName: grafana-pvc-prod
+      - name: grafana-dashboards
+        configMap:
+          name: grafana-dashboards
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: grafana-pvc-prod
+  namespace: monitoring
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: gp2
+  resources:
+    requests:
+      storage: 20Gi  # Large storage for production
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: grafana-prod
+  namespace: monitoring
+  labels:
+    app: grafana
+    environment: prod
+spec:
+  selector:
+    app: grafana
+    environment: prod
+  ports:
+  - name: http
+    port: 3000
+    targetPort: 3000
+  type: ClusterIP

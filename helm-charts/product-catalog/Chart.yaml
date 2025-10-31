@@ -1,0 +1,16 @@
+apiVersion: v2
+name: product-catalog
+description: A Helm chart for Product Catalog microservice
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
+keywords:
+  - ecommerce
+  - microservices
+  - product-catalog
+home: https://github.com/your-org/ecommerce-platform
+sources:
+  - https://github.com/your-org/ecommerce-platform
+maintainers:
+  - name: DevOps Team
+    email: devops@yourcompany.com

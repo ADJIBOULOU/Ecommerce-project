@@ -1,0 +1,136 @@
+# Production environment values for Product Catalog service
+
+# Production replica count
+replicaCount: 3
+
+image:
+  repository: your-account.dkr.ecr.us-west-2.amazonaws.com/product-catalog
+  pullPolicy: IfNotPresent
+  tag: "v1.0.0"  # Use specific version tags in production
+
+nameOverride: ""
+fullnameOverride: ""
+
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 8080
+
+ingress:
+  enabled: true
+  className: "alb"
+  annotations:
+    kubernetes.io/ingress.class: alb
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/ssl-redirect: '443'
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTPS": 443}]'
+    alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:us-west-2:ACCOUNT:certificate/CERT-ID
+    alb.ingress.kubernetes.io/tags: |
+      Environment=production,
+      Project=ecommerce-platform,
+      ManagedBy=k8s-ingress
+    alb.ingress.kubernetes.io/security-groups: sg-production-alb
+  hosts:
+    - host: api.ecommerce-platform.com
+      paths:
+        - path: /api/products
+          pathType: Prefix
+  tls:
+    - secretName: production-tls
+      hosts:
+        - api.ecommerce-platform.com
+
+# Production resource limits
+resources:
+  limits:
+    cpu: 2000m
+    memory: 2Gi
+  requests:
+    cpu: 500m
+    memory: 512Mi
+
+# Production autoscaling
+autoscaling:
+  enabled: true
+  minReplicas: 3
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 60
+  targetMemoryUtilizationPercentage: 70
+
+# Production pod disruption budget
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 2
+
+# Node selection for production
+nodeSelector:
+  kubernetes.io/arch: amd64
+  node.kubernetes.io/instance-type: m5.large
+
+tolerations: []
+
+affinity:
+  podAntiAffinity:
+    requiredDuringSchedulingIgnoredDuringExecution:
+      - labelSelector:
+          matchExpressions:
+            - key: app.kubernetes.io/name
+              operator: In
+              values:
+                - product-catalog
+        topologyKey: kubernetes.io/hostname
+
+# Production health checks
+livenessProbe:
+  httpGet:
+    path: /health
+    port: http
+  initialDelaySeconds: 30
+  periodSeconds: 30
+  timeoutSeconds: 5
+  failureThreshold: 3
+
+readinessProbe:
+  httpGet:
+    path: /ready
+    port: http
+  initialDelaySeconds: 15
+  periodSeconds: 10
+  timeoutSeconds: 3
+  failureThreshold: 3
+
+# Production environment variables
+env:
+  - name: PORT
+    value: "8080"
+  - name: NODE_ENV
+    value: "production"
+  - name: LOG_LEVEL
+    value: "warn"
+  - name: DEBUG
+    value: "false"
+
+# Production configuration
+config:
+  database:
+    host: "postgres-prod.production.svc.cluster.local"
+    port: "5432"
+    name: "productdb"
+  redis:
+    host: "redis-prod.production.svc.cluster.local"
+    port: "6379"
+  feature_flags:
+    enable_caching: "true"
+    enable_recommendations: "true"
+
+# Production secrets (use AWS Secrets Manager)
+secret:
+  database:
+    username: "product_user"
+    # Reference to AWS Secrets Manager
+    password: ""  # Will be injected by external-secrets-operator
+  redis:
+    password: ""  # Will be injected by external-secrets-operator
+  jwt:
+    secret: ""    # Will be injected by external-secrets-operator

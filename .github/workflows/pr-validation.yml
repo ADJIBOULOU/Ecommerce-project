@@ -1,0 +1,231 @@
+name: Pull Request Validation
+
+on:
+  pull_request:
+    branches: [ develop, master, release ]
+
+env:
+  AWS_REGION: us-west-2
+
+jobs:
+  # Validate Terraform
+  terraform-validate:
+    name: 'Validate Terraform'
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+    
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v3
+      with:
+        terraform_version: 1.6.0
+    
+    - name: Validate All Terraform Environments
+      run: |
+        # Define environments array
+        environments=("dev" "staging" "prod")
+        
+        # Loop through each environment
+        for env in "${environments[@]}"; do
+          echo "🔍 Validating Terraform for environment: $env"
+          
+          cd ./terraform/environments/$env
+          
+          # Format check
+          echo "📋 Checking Terraform format..."
+          terraform fmt -check -recursive
+          
+          # Initialize without backend
+          echo "🔧 Initializing Terraform..."
+          terraform init -backend=false
+          
+          # Validate configuration
+          echo "✅ Validating Terraform configuration..."
+          terraform validate
+          
+          # Return to root directory
+          cd ../../..
+          
+          echo "✅ Environment $env validation completed successfully"
+        done
+
+  # Lint Kubernetes manifests
+  k8s-lint:
+    name: 'Lint Kubernetes Manifests'
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+    
+    - name: Setup kubectl
+      uses: azure/setup-kubectl@v3
+    
+    - name: Lint Kubernetes manifests
+      run: |
+        find kubernetes/ -name '*.yaml' -o -name '*.yml' | xargs -I {} kubectl --dry-run=client --validate=true apply -f {}
+
+  # Validate Helm charts
+  helm-validate:
+    name: 'Validate Helm Charts'
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+    
+    - name: Setup Helm
+      uses: azure/setup-helm@v3
+      with:
+        version: '3.12.0'
+    
+    - name: Validate All Helm Charts
+      run: |
+        # Define charts array
+        charts=("product-catalog" "user-accounts" "shopping-cart" "order-management" "payment-processing")
+        
+        # Loop through each chart
+        for chart in "${charts[@]}"; do
+          echo "🔍 Validating Helm chart: $chart"
+          
+          # Lint Helm chart
+          echo "📋 Linting Helm chart..."
+          helm lint ./helm-charts/$chart
+          
+          # Template Helm chart
+          echo "🔧 Templating Helm chart..."
+          helm template test ./helm-charts/$chart --debug --dry-run
+          
+          echo "✅ Chart $chart validation completed successfully"
+        done
+
+  # Security scanning
+  # security-scan:
+  #   name: 'Security Scan'
+  #   runs-on: ubuntu-latest
+    
+  #   steps:
+  #   - name: Checkout
+  #     uses: actions/checkout@v4
+    
+  #   - name: Run Trivy vulnerability scanner
+  #     uses: aquasecurity/trivy-action@master
+  #     with:
+  #       scan-type: 'fs'
+  #       scan-ref: '.'
+  #       exit-code: '1'
+  #       severity: 'CRITICAL,HIGH'
+    
+  #   - name: Run Checkov
+  #     uses: bridgecrewio/checkov-action@master
+  #     with:
+  #       directory: .
+  #       framework: terraform,kubernetes,dockerfile
+  #       soft_fail: true
+
+  # Test Helm chart installation
+  helm-test:
+    name: 'Test Helm Installation'
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+    
+    - name: Setup Helm
+      uses: azure/setup-helm@v3
+      with:
+        version: '3.12.0'
+    
+    - name: Setup kind cluster
+      uses: helm/kind-action@v1.8.0
+      with:
+        cluster_name: test-cluster
+    
+    - name: Test Helm chart installation
+      run: |
+        # Test each chart installation
+        for chart in product-catalog user-accounts shopping-cart order-management payment-processing; do
+          echo "Testing $chart chart installation..."
+          helm install test-$chart ./helm-charts/$chart \
+            --dry-run \
+            --debug \
+            --set image.repository=nginx \
+            --set image.tag=latest
+        done
+
+  # Code quality checks
+  # code-quality:
+  #   name: 'Code Quality'
+  #   runs-on: ubuntu-latest
+    
+  #   steps:
+  #   - name: Checkout
+  #     uses: actions/checkout@v4
+    
+  #   - name: Setup Python
+  #     uses: actions/setup-python@v4
+  #     with:
+  #       python-version: '3.11'
+    
+  #   - name: Install tools
+  #     run: |
+  #       pip install yamllint
+  #       curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v1.54.2
+    
+  #   - name: Lint YAML files
+  #     run: |
+  #       yamllint -c .yamllint.yml .
+    
+  #   - name: Check for secrets
+  #     uses: trufflesecurity/trufflehog@main
+  #     with:
+  #       path: ./
+  #       base: main
+  #       head: HEAD
+
+  # # Documentation check
+  # docs-check:
+  #   name: 'Documentation Check'
+  #   runs-on: ubuntu-latest
+    
+  #   steps:
+  #   - name: Checkout
+  #     uses: actions/checkout@v4
+    
+  #   - name: Setup Node.js
+  #     uses: actions/setup-node@v3
+  #     with:
+  #       node-version: '18'
+    
+  #   - name: Install markdown-link-check
+  #     run: npm install -g markdown-link-check
+    
+  #   - name: Check README links
+  #     run: |
+  #       find . -name "*.md" -exec markdown-link-check {} \;
+
+  # Notify status
+  notify-pr-status:
+    name: 'PR Status Notification'
+    runs-on: ubuntu-latest
+    needs: [terraform-validate, k8s-lint, helm-validate, helm-test]
+    if: always()
+    
+    steps:
+    - name: PR Status Check
+      run: |
+        if [[ "${{ needs.terraform-validate.result }}" == "success" && \
+              "${{ needs.k8s-lint.result }}" == "success" && \
+              "${{ needs.helm-validate.result }}" == "success" && \
+              "${{ needs.security-scan.result }}" == "success" && \
+              "${{ needs.helm-test.result }}" == "success" && \
+              "${{ needs.code-quality.result }}" == "success" && \
+              "${{ needs.docs-check.result }}" == "success" ]]; then
+          echo "✅ All PR validation checks passed!"
+        else
+          echo "❌ Some PR validation checks failed!"
+          exit 1
+        fi

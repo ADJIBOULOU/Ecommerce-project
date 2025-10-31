@@ -1,0 +1,16 @@
+# RBAC Configuration for E-commerce Platform - Cluster-wide resources only
+
+# ClusterRole for microservices (shared across environments)
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: ecommerce-cluster-role
+  labels:
+    app: ecommerce-platform
+rules:
+- apiGroups: [""]
+  resources: ["nodes", "persistentvolumes"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["storage.k8s.io"]
+  resources: ["storageclasses"]
+  verbs: ["get", "list", "watch"]

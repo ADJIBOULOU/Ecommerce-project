@@ -1,0 +1,49 @@
+# Development environment values for Payment Processing service
+
+replicaCount: 1
+
+image:
+  repository: your-account.dkr.ecr.us-west-2.amazonaws.com/payment-processing
+  pullPolicy: Always
+  tag: "dev-latest"
+
+resources:
+  limits:
+    cpu: 500m
+    memory: 512Mi
+  requests:
+    cpu: 100m
+    memory: 128Mi
+
+autoscaling:
+  enabled: false
+
+config:
+  database:
+    host: "postgres-dev.dev.svc.cluster.local"
+    name: "paymentdb_dev"
+  payment_gateways:
+    stripe:
+      api_url: "https://api.stripe.com"  # Use sandbox in dev
+    paypal:
+      api_url: "https://api.sandbox.paypal.com"
+  feature_flags:
+    enable_fraud_detection: "false"
+    enable_retry_logic: "true"
+    payment_timeout: "300"  # 5 minutes for dev
+
+env:
+  - name: NODE_ENV
+    value: "development"
+  - name: LOG_LEVEL
+    value: "debug"
+
+secret:
+  database:
+    username: "payment_user_dev"
+    password: "dev_password_123"
+  payment_gateways:
+    stripe:
+      api_key: "sk_test_dev_key"
+    paypal:
+      client_id: "dev_paypal_client"

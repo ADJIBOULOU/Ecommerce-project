@@ -1,0 +1,49 @@
+# RBAC Configuration for Staging Environment
+
+# Service Account for staging
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: ecommerce-service-account
+  namespace: staging
+  labels:
+    app: ecommerce-platform
+    environment: staging
+---
+# Role for staging environment
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  namespace: staging
+  name: staging-role
+  labels:
+    app: ecommerce-platform
+    environment: staging
+rules:
+- apiGroups: [""]
+  resources: ["pods", "services", "endpoints", "configmaps", "secrets", "persistentvolumeclaims"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+- apiGroups: ["apps"]
+  resources: ["deployments", "replicasets", "statefulsets"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+- apiGroups: ["networking.k8s.io"]
+  resources: ["ingresses", "networkpolicies"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+---
+# RoleBinding for staging environment
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: staging-role-binding
+  namespace: staging
+  labels:
+    app: ecommerce-platform
+    environment: staging
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: staging-role
+subjects:
+- kind: ServiceAccount
+  name: ecommerce-service-account
+  namespace: staging

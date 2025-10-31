@@ -1,0 +1,112 @@
+# Environment-specific Grafana deployment for staging
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: grafana-staging
+  namespace: monitoring
+  labels:
+    app: grafana
+    environment: staging
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: grafana
+      environment: staging
+  template:
+    metadata:
+      labels:
+        app: grafana
+        environment: staging
+    spec:
+      serviceAccountName: grafana
+      automountServiceAccountToken: false
+      securityContext:
+        fsGroup: 472
+        runAsUser: 472
+        runAsNonRoot: true
+      containers:
+      - name: grafana
+        image: grafana/grafana:10.1.0
+        ports:
+        - containerPort: 3000
+        env:
+        - name: GF_SECURITY_ADMIN_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: grafana-admin-secret
+              key: password
+        - name: GF_INSTALL_PLUGINS
+          value: "grafana-kubernetes-app,grafana-piechart-panel,grafana-worldmap-panel"
+        resources:
+          limits:
+            cpu: 300m      # Medium limits for staging
+            memory: 768Mi
+            ephemeral-storage: 1.5Gi
+          requests:
+            cpu: 150m
+            memory: 384Mi
+            ephemeral-storage: 768Mi
+        volumeMounts:
+        - name: grafana-config-volume
+          mountPath: /etc/grafana/
+        - name: grafana-storage
+          mountPath: /var/lib/grafana
+        - name: grafana-dashboards
+          mountPath: /var/lib/grafana/dashboards
+        livenessProbe:
+          httpGet:
+            path: /api/health
+            port: 3000
+          initialDelaySeconds: 60
+          timeoutSeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /api/health
+            port: 3000
+          initialDelaySeconds: 5
+          timeoutSeconds: 3
+          periodSeconds: 5
+      volumes:
+      - name: grafana-config-volume
+        configMap:
+          name: grafana-config-staging
+      - name: grafana-storage
+        persistentVolumeClaim:
+          claimName: grafana-pvc-staging
+      - name: grafana-dashboards
+        configMap:
+          name: grafana-dashboards
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: grafana-pvc-staging
+  namespace: monitoring
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: gp2
+  resources:
+    requests:
+      storage: 10Gi  # Medium storage for staging
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: grafana-staging
+  namespace: monitoring
+  labels:
+    app: grafana
+    environment: staging
+spec:
+  selector:
+    app: grafana
+    environment: staging
+  ports:
+  - name: http
+    port: 3000
+    targetPort: 3000
+  type: ClusterIP

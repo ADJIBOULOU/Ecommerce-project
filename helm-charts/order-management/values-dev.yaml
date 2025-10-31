@@ -1,0 +1,41 @@
+# Development environment values for Order Management service
+
+replicaCount: 1
+
+image:
+  repository: your-account.dkr.ecr.us-west-2.amazonaws.com/order-management
+  pullPolicy: Always
+  tag: "dev-latest"
+
+resources:
+  limits:
+    cpu: 500m
+    memory: 512Mi
+  requests:
+    cpu: 100m
+    memory: 128Mi
+
+autoscaling:
+  enabled: false
+
+config:
+  database:
+    host: "postgres-dev.dev.svc.cluster.local"
+    name: "orderdb_dev"
+  message_queue:
+    host: "rabbitmq-dev.dev.svc.cluster.local"
+  feature_flags:
+    enable_notifications: "false"
+    enable_inventory_check: "false"
+    order_timeout: "7200"  # 2 hours for dev
+
+env:
+  - name: NODE_ENV
+    value: "development"
+  - name: LOG_LEVEL
+    value: "debug"
+
+secret:
+  database:
+    username: "order_user_dev"
+    password: "dev_password_123"

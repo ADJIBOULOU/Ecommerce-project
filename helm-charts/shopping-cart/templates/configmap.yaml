@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "shopping-cart.fullname" . }}-config
+  labels:
+    {{- include "shopping-cart.labels" . | nindent 4 }}
+data:
+  database.host: {{ .Values.config.database.host | quote }}
+  database.port: {{ .Values.config.database.port | quote }}
+  database.name: {{ .Values.config.database.name | quote }}
+  redis.host: {{ .Values.config.redis.host | quote }}
+  redis.port: {{ .Values.config.redis.port | quote }}
+  feature_flags.enable_caching: {{ .Values.config.feature_flags.enable_caching | quote }}
+  feature_flags.enable_cart_persistence: {{ .Values.config.feature_flags.enable_cart_persistence | quote }}
+  feature_flags.session_timeout: {{ .Values.config.feature_flags.session_timeout | quote }}

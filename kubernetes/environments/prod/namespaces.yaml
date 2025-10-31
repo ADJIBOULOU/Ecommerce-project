@@ -1,0 +1,21 @@
+# Namespace for production environment
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: production
+  labels:
+    name: production
+    environment: production
+  annotations:
+    description: "Production environment for e-commerce microservices"
+---
+# Namespace for monitoring stack
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: monitoring
+  labels:
+    name: monitoring
+    component: monitoring
+  annotations:
+    description: "Monitoring stack with Prometheus and Grafana"

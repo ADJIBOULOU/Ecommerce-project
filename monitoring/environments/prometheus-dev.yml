@@ -1,0 +1,137 @@
+# Development environment Prometheus configuration
+
+global:
+  scrape_interval: 30s      # Reduced frequency for dev
+  evaluation_interval: 30s  # Reduced frequency for dev
+  external_labels:
+    cluster: 'ecommerce-platform-dev-eks'
+    environment: 'development'
+    region: 'us-west-2'
+
+rule_files:
+  - "alert_rules_dev.yml"
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+          - alertmanager:9093
+
+scrape_configs:
+  # Prometheus itself
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+    scrape_interval: 30s
+
+  # Kubernetes API server
+  - job_name: 'kubernetes-apiservers'
+    kubernetes_sd_configs:
+      - role: endpoints
+        namespaces:
+          names:
+            - default
+    scheme: https
+    tls_config:
+      ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+    bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_namespace, __meta_kubernetes_service_name, __meta_kubernetes_endpoint_port_name]
+        action: keep
+        regex: default;kubernetes;https
+
+  # Kubernetes nodes (reduced metrics for dev)
+  - job_name: 'kubernetes-nodes'
+    kubernetes_sd_configs:
+      - role: node
+    scheme: https
+    tls_config:
+      ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+    bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+    scrape_interval: 60s  # Less frequent for dev
+
+  # Application services in dev namespace
+  - job_name: 'ecommerce-services-dev'
+    kubernetes_sd_configs:
+      - role: endpoints
+        namespaces:
+          names:
+            - dev
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_service_annotation_prometheus_io_scrape]
+        action: keep
+        regex: true
+      - source_labels: [__meta_kubernetes_service_annotation_prometheus_io_path]
+        action: replace
+        target_label: __metrics_path__
+        regex: (.+)
+      - source_labels: [__address__, __meta_kubernetes_service_annotation_prometheus_io_port]
+        action: replace
+        regex: ([^:]+)(?::\d+)?;(\d+)
+        replacement: $1:$2
+        target_label: __address__
+      - source_labels: [__meta_kubernetes_service_name]
+        action: replace
+        target_label: service
+    scrape_interval: 60s  # Less frequent monitoring for dev
+
+  # Individual microservices monitoring for dev
+  - job_name: 'product-catalog-dev'
+    kubernetes_sd_configs:
+      - role: endpoints
+        namespaces:
+          names:
+            - dev
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_service_name]
+        action: keep
+        regex: product-catalog.*
+    scrape_interval: 60s
+
+  - job_name: 'user-accounts-dev'
+    kubernetes_sd_configs:
+      - role: endpoints
+        namespaces:
+          names:
+            - dev
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_service_name]
+        action: keep
+        regex: user-accounts.*
+    scrape_interval: 60s
+
+  - job_name: 'shopping-cart-dev'
+    kubernetes_sd_configs:
+      - role: endpoints
+        namespaces:
+          names:
+            - dev
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_service_name]
+        action: keep
+        regex: shopping-cart.*
+    scrape_interval: 60s
+
+  - job_name: 'order-management-dev'
+    kubernetes_sd_configs:
+      - role: endpoints
+        namespaces:
+          names:
+            - dev
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_service_name]
+        action: keep
+        regex: order-management.*
+    scrape_interval: 60s
+
+  - job_name: 'payment-processing-dev'
+    kubernetes_sd_configs:
+      - role: endpoints
+        namespaces:
+          names:
+            - dev
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_service_name]
+        action: keep
+        regex: payment-processing.*
+    scrape_interval: 30s  # More frequent for payment service even in dev

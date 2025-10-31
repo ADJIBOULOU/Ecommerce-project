@@ -1,0 +1,5 @@
+# Base Network Policies for E-commerce Platform
+# Environment-specific network policies are in their respective environment directories
+
+# Generic network policy for kube-system namespace access (if needed)
+# Add common/shared network policies here if any

@@ -1,0 +1,57 @@
+# Staging environment values for Shopping Cart service
+
+# Override default values for staging environment
+replicaCount: 2
+
+image:
+  repository: your-account.dkr.ecr.us-west-2.amazonaws.com/shopping-cart
+  pullPolicy: Always
+  tag: "staging-latest"
+
+# Resource limits for staging
+resources:
+  limits:
+    cpu: 1000m
+    memory: 1Gi
+  requests:
+    cpu: 250m
+    memory: 256Mi
+
+# Autoscaling enabled for staging
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 6
+
+# ConfigMap for application configuration
+config:
+  database:
+    host: "postgres-staging.staging.svc.cluster.local"
+    port: "5432"
+    name: "cartdb_staging"
+  redis:
+    host: "redis-staging.staging.svc.cluster.local"
+    port: "6379"
+  feature_flags:
+    enable_caching: "true"
+    enable_cart_persistence: "true"
+    session_timeout: "1800"  # 30 minutes
+
+# Environment variables for staging
+env:
+  - name: PORT
+    value: "8080"
+  - name: NODE_ENV
+    value: "staging"
+  - name: LOG_LEVEL
+    value: "info"
+
+# Secret configuration
+secret:
+  database:
+    username: "cart_user_staging"
+    password: "staging_secure_password"
+  redis:
+    password: "staging_redis_secure_pass"
+  jwt:
+    secret: "staging_jwt_secure_key"

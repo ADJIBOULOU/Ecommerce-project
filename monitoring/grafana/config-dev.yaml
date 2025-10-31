@@ -1,0 +1,61 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-datasources-dev
+  namespace: monitoring
+data:
+  prometheus.yaml: |-
+    {
+        "apiVersion": 1,
+        "datasources": [
+            {
+               "access":"proxy",
+                "editable": true,
+                "name": "prometheus-dev",
+                "orgId": 1,
+                "type": "prometheus",
+                "url": "http://prometheus:9090",
+                "version": 1,
+                "jsonData": {
+                    "timeInterval": "30s"
+                }
+            }
+        ]
+    }
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-config-dev
+  namespace: monitoring
+data:
+  grafana.ini: |
+    [analytics]
+    check_for_updates = false
+    
+    [log]
+    mode = console
+    level = debug
+    
+    [paths]
+    data = /var/lib/grafana/
+    logs = /var/log/grafana
+    plugins = /var/lib/grafana/plugins
+    provisioning = /etc/grafana/provisioning
+    
+    [server]
+    protocol = http
+    http_port = 3000
+    root_url = http://grafana-dev.monitoring.svc.cluster.local:3000
+    
+    [users]
+    allow_sign_up = false
+    auto_assign_org = true
+    auto_assign_org_role = Viewer
+    
+    [auth.anonymous]
+    enabled = true
+    org_role = Viewer
+    
+    [dashboards]
+    default_home_dashboard_path = /etc/grafana/provisioning/dashboards/dev-overview.json

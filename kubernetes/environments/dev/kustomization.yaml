@@ -1,0 +1,63 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Base resources
+resources:
+  - ../../base
+  - namespaces.yaml
+  - rbac.yaml
+  - ingress.yaml
+  - network-policies.yaml
+  - resource-limits.yaml
+
+# Common labels for all resources
+labels:
+  - includeSelectors: true
+    pairs:
+      environment: dev
+      app.kubernetes.io/managed-by: kustomize
+
+# Common annotations
+commonAnnotations:
+  environment: development
+  deployment.kubernetes.io/revision: "1"
+
+# Patches for environment-specific configurations
+patches:
+  - path: ingress-patch.yaml
+    target:
+      kind: Ingress
+  - path: cluster-autoscaler-patch.yaml
+    target:
+      kind: Deployment
+      name: cluster-autoscaler
+  - path: cluster-autoscaler-serviceaccount-patch.yaml
+    target:
+      kind: ServiceAccount
+      name: cluster-autoscaler
+
+# ConfigMaps for environment-specific configuration
+configMapGenerator:
+  - name: app-config
+    literals:
+      - ENV=development
+      - LOG_LEVEL=debug
+      - DEBUG=true
+      - METRICS_ENABLED=true
+
+# Secrets for environment-specific sensitive data
+secretGenerator:
+  - name: app-secrets
+    literals:
+      - DATABASE_PASSWORD=dev-password-change-me
+    type: Opaque
+
+# Resource transformers
+replicas:
+  - name: cluster-autoscaler
+    count: 1
+
+# Images with environment-specific tags
+images:
+  - name: cluster-autoscaler
+    newTag: v1.29.2

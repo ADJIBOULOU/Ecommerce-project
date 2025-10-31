@@ -1,0 +1,55 @@
+# Development environment values for Shopping Cart service
+
+# Override default values for development environment
+replicaCount: 1
+
+image:
+  repository: your-account.dkr.ecr.us-west-2.amazonaws.com/shopping-cart
+  pullPolicy: Always
+  tag: "dev-latest"
+
+# Resource limits for development (reduced for cost)
+resources:
+  limits:
+    cpu: 500m
+    memory: 512Mi
+  requests:
+    cpu: 100m
+    memory: 128Mi
+
+# Autoscaling disabled for development
+autoscaling:
+  enabled: false
+
+# ConfigMap for application configuration
+config:
+  database:
+    host: "postgres-dev.dev.svc.cluster.local"
+    port: "5432"
+    name: "cartdb_dev"
+  redis:
+    host: "redis-dev.dev.svc.cluster.local"
+    port: "6379"
+  feature_flags:
+    enable_caching: "false"
+    enable_cart_persistence: "true"
+    session_timeout: "7200"  # 2 hours for dev
+
+# Environment variables for development
+env:
+  - name: PORT
+    value: "8080"
+  - name: NODE_ENV
+    value: "development"
+  - name: LOG_LEVEL
+    value: "debug"
+
+# Secret configuration
+secret:
+  database:
+    username: "cart_user_dev"
+    password: "dev_password_123"
+  redis:
+    password: "dev_redis_pass"
+  jwt:
+    secret: "dev_jwt_secret_key"

@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "product-catalog.fullname" . }}-config
+  labels:
+    {{- include "product-catalog.labels" . | nindent 4 }}
+data:
+  database.host: {{ .Values.config.database.host | quote }}
+  database.port: {{ .Values.config.database.port | quote }}
+  database.name: {{ .Values.config.database.name | quote }}
+  redis.host: {{ .Values.config.redis.host | quote }}
+  redis.port: {{ .Values.config.redis.port | quote }}
+  feature_flags.enable_caching: {{ .Values.config.feature_flags.enable_caching | quote }}
+  feature_flags.enable_recommendations: {{ .Values.config.feature_flags.enable_recommendations | quote }}

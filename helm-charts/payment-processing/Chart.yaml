@@ -1,0 +1,16 @@
+apiVersion: v2
+name: payment-processing
+description: A Helm chart for Payment Processing microservice
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
+keywords:
+  - ecommerce
+  - microservices
+  - payment-processing
+home: https://github.com/your-org/ecommerce-platform
+sources:
+  - https://github.com/your-org/ecommerce-platform
+maintainers:
+  - name: DevOps Team
+    email: devops@yourcompany.com
