@@ -223,7 +223,7 @@ Deploy environment-specific Kubernetes configurations:
 
 ```bash
 # Navigate to project root
-cd /Users/sandeepcc/workspace/project
+cd /Users/djamioucc/workspace/project
 
 # Deploy environment-specific configurations using Kustomize
 # For production:
@@ -518,7 +518,7 @@ echo "Dev cluster name: $DEV_CLUSTER_NAME"
 aws eks update-kubeconfig --region us-west-2 --name $DEV_CLUSTER_NAME
 
 # Deploy base configurations (run from project root)
-cd /Users/sandeepcc/workspace/project && kubectl apply -k kubernetes/environments/dev/
+cd /Users/djamioucc/workspace/project && kubectl apply -k kubernetes/environments/dev/
 
 # Deploy ALB Ingress Controller for dev environment
 # Note: Helm repo is already added globally, no need to add again
@@ -579,7 +579,7 @@ terraform apply
 aws eks update-kubeconfig --region us-west-2 --name ecommerce-platform-staging-eks
 
 # Deploy base configurations (run from project root)
-cd /Users/sandeepcc/workspace/project && kubectl apply -k kubernetes/environments/staging/
+cd /Users/djamioucc/workspace/project && kubectl apply -k kubernetes/environments/staging/
 
 # Deploy ALB Ingress Controller for staging environment  
 # Note: Helm repo is already added globally, no need to add again
